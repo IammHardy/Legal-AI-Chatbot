@@ -1,40 +1,56 @@
-<h1>Legal AI Chat Demo</h1>
+<!-- app/views/chat/index.html.erb -->
+<div id="chat-widget" style="width: 100%; max-width: 600px; margin: auto; font-family: sans-serif;">
+  <h2>Legal AI Chat</h2>
+  <div id="chat-container" style="border:1px solid #ccc; padding:10px; min-height:300px; background:#f9f9f9; overflow-y:auto;"></div>
 
-<div id="chat-container" style="border:1px solid #ccc; padding:10px; min-height:150px;"></div>
-
-<input type="text" id="user-message" placeholder="Type your message...">
-<button id="send-btn">Send</button>
-<button id="save-btn">Save Chat</button>
+  <input type="text" id="user-message" placeholder="Type your message..." style="width:75%; padding:8px;">
+  <button id="send-btn" style="padding:8px 12px;">Send</button>
+  <button id="save-btn" style="padding:8px 12px;">Save Chat</button>
+</div>
 
 <script>
+const container = document.getElementById("chat-container");
+
 async function sendMessage() {
-  const msgInput = document.getElementById("user-message")
-  const message = msgInput.value
-  if (!message) return
+  const message = document.getElementById("user-message").value;
+  if (!message) return;
+
+  // Display user message
+  container.innerHTML += `<p><b>You:</b> ${message}</p>`;
 
   const res = await fetch("/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message })
-  })
-  const data = await res.json()
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({message})
+  });
+  const data = await res.json();
 
-  const container = document.getElementById("chat-container")
-  container.innerHTML += `<p><b>You:</b> ${message}</p>`
-  container.innerHTML += `<p><b>AI:</b> ${data.reply}</p>`
+  // Display AI reply
+  // Split disclaimer for styling
+  let parts = data.reply.split("**Disclaimer:**");
+  let mainText = parts[0];
+  let disclaimer = parts[1] || "";
 
-  if(data.lead_capture){
-    container.innerHTML += `<p style="color:red;"><b>Lead detected!</b></p>`
+  container.innerHTML += `<p><b>Legal AI:</b> ${mainText}</p>`;
+  if (disclaimer) {
+    container.innerHTML += `<p style="color: #aa0000; font-size:0.9em;"><b>Disclaimer:</b>${disclaimer}</p>`;
   }
 
-  msgInput.value = ""
+  // Lead capture CTA
+  if (data.lead_capture) {
+    container.innerHTML += `<p style="background:#eef; padding:5px;"><b>Request Consultation:</b> <a href="/contact" target="_blank">Click here to schedule</a></p>`;
+  }
+
+  document.getElementById("user-message").value = "";
+  container.scrollTop = container.scrollHeight;
 }
 
-document.getElementById("send-btn").onclick = sendMessage
+document.getElementById("send-btn").onclick = sendMessage;
 
+// Save chat
 document.getElementById("save-btn").onclick = async () => {
-  const res = await fetch("/summary", { method: "POST" })
-  const data = await res.json()
-  alert(data.status === "saved" ? "Chat saved!" : "Failed to save chat")
-}
+  const res = await fetch("/summary", { method: "POST" });
+  const data = await res.json();
+  alert(data.status === "saved" ? "Chat saved!" : "Failed to save chat");
+};
 </script>

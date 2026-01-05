@@ -1,0 +1,6 @@
+<h2>Saved Chat Summaries</h2>
+<ul>
+  <% @summaries.each do |file| %>
+    <li><a href="<%= "/summaries/#{file}" %>" target="_blank"><%= file %></a></li>
+  <% end %>
+</ul>
