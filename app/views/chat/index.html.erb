@@ -10,9 +10,10 @@
 
 <script>
 const container = document.getElementById("chat-container");
+let firstMessage = true; // Track first message for disclaimer
 
 async function sendMessage() {
-  const message = document.getElementById("user-message").value;
+  const message = document.getElementById("user-message").value.trim();
   if (!message) return;
 
   // Display user message
@@ -25,16 +26,18 @@ async function sendMessage() {
   });
   const data = await res.json();
 
-  // Display AI reply
-  // Split disclaimer for styling
-  let parts = data.reply.split("**Disclaimer:**");
-  let mainText = parts[0];
-  let disclaimer = parts[1] || "";
+  let replyHtml = "";
 
-  container.innerHTML += `<p><b>Legal AI:</b> ${mainText}</p>`;
-  if (disclaimer) {
-    container.innerHTML += `<p style="color: #aa0000; font-size:0.9em;"><b>Disclaimer:</b>${disclaimer}</p>`;
+  // Style messages by type
+  if (data.type === "faq") {
+    replyHtml = `<p style="background:#eef; padding:5px;"><b>FAQ Answer:</b> ${data.reply}</p>`;
+  } else if (data.type === "ai") {
+    replyHtml = `<p style="background:#fff; padding:5px; border-left:3px solid #0077cc;"><b>Legal AI:</b> ${data.reply}</p>`;
+  } else if (data.type === "fallback") {
+    replyHtml = `<p style="background:#ffe; padding:5px; border-left:3px solid #aa0000;"><b>Demo AI:</b> ${data.reply}</p>`;
   }
+
+  container.innerHTML += replyHtml;
 
   // Lead capture CTA
   if (data.lead_capture) {

@@ -48,6 +48,8 @@ group :development, :test do
 end
 
 gem 'dotenv-rails', groups: [:development, :test]
+gem 'pg', '>= 1.4'
+
 
 group :development do
   # Use console on exceptions pages [https://github.com/rails/web-console]
