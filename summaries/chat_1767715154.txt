@@ -1,0 +1,4 @@
+User: Hello
+User: I need help
+User: my wife wants a divorce
+User: just all of a sudden, she wants us to share assets

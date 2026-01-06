@@ -4,8 +4,9 @@ class ChatController < ApplicationController
 
   LEAD_THRESHOLD = 60
 
-  @@inquiry_score = 0
+  # Use class variables for demo; for production use session or DB
   @@conversation = []
+  @@inquiry_score = 0
   @@disclaimer_shown = false
   @@last_user_message = nil
 
@@ -26,23 +27,25 @@ class ChatController < ApplicationController
 
   def chat
     user_message = params[:message].to_s.strip
-    @@last_user_message = user_message
+    return render json: { reply: "Please enter a message.", score: @@inquiry_score } if user_message.empty?
 
+    @@last_user_message = user_message
     @@conversation << { role: "user", content: user_message }
 
-    @@inquiry_score += calculate_score(user_message)
-    score = @@inquiry_score
+    # ✅ Accumulate score based on each message
+    score_increment = calculate_score(user_message)
+    @@inquiry_score += score_increment
 
-    # 🚨 HANDOFF — STOP AI COMPLETELY
-    if score >= LEAD_THRESHOLD
+    # 🚨 HANDOFF — stop AI completely if threshold reached
+    if @@inquiry_score >= LEAD_THRESHOLD
       return render json: {
         reply: handoff_message,
         cta: "Please submit your details so a legal professional can contact you.",
-        score: score
+        score: @@inquiry_score
       }
     end
 
-    # 🤖 AI CONVERSATION
+    # 🤖 AI CONVERSATION (only below threshold)
     begin
       client = OpenAI::Client.new(access_token: ENV["OPENAI_API_KEY"])
       response = client.chat(
@@ -58,11 +61,11 @@ class ChatController < ApplicationController
 
       reply = response.dig("choices", 0, "message", "content")
 
+      # ✅ Show disclaimer only once
+      disclaimer = nil
       if !@@disclaimer_shown
         disclaimer = "This does not constitute legal advice."
         @@disclaimer_shown = true
-      else
-        disclaimer = nil
       end
 
     rescue
@@ -73,10 +76,11 @@ class ChatController < ApplicationController
     render json: {
       reply: reply,
       disclaimer: disclaimer,
-      score: score
+      score: @@inquiry_score
     }
   end
 
+  # ✅ Keyword-based scoring
   def calculate_score(message)
     keywords = {
       "lawyer" => 30,
@@ -87,13 +91,18 @@ class ChatController < ApplicationController
       "help" => 10
     }
 
-    keywords.sum { |word, value| message.downcase.include?(word) ? value : 0 }
+    score = 0
+    keywords.each do |word, value|
+      score += value if message.downcase.include?(word)
+    end
+    score
   end
 
   def handoff_message
     "Thanks for explaining your situation. This looks like something a legal professional should review directly. Please share your details below and someone will contact you shortly."
   end
 
+  # POST /leads
   def leads
     data = JSON.parse(request.body.read)
     name = data["name"]
@@ -103,6 +112,20 @@ class ChatController < ApplicationController
     File.write(
       Rails.root.join("leads", "#{Time.now.to_i}_#{name.gsub(' ', '_')}.txt"),
       "Name: #{name}\nEmail: #{email}\nLast Message: #{@@last_user_message}"
+    )
+
+    render json: { status: "saved" }
+  end
+
+  # POST /summary
+  def summary
+    summaries_dir = Rails.root.join("summaries")
+    Dir.mkdir(summaries_dir) unless Dir.exist?(summaries_dir)
+
+    filename = summaries_dir.join("chat_#{Time.now.to_i}.txt")
+    File.write(
+      filename,
+      @@conversation.map { |m| "#{m[:role].capitalize}: #{m[:content]}" }.join("\n")
     )
 
     render json: { status: "saved" }
