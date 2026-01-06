@@ -1,19 +1,16 @@
 document.addEventListener("DOMContentLoaded", () => {
   const container = document.getElementById("chat-container");
   const input = document.getElementById("user-message");
-
-  // Track last user message for lead form
-  let lastUserMessageForLead = null;
+  const sendBtn = document.getElementById("send-btn");
+  const saveBtn = document.getElementById("save-btn");
 
   async function sendMessage() {
     const message = input.value.trim();
     if (!message) return;
 
-    // Show user's message
     container.innerHTML += `<p><b>You:</b> ${message}</p>`;
     input.value = "";
 
-    // Send to Rails backend
     const res = await fetch("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -22,10 +19,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const data = await res.json();
 
-    // Show AI reply
     container.innerHTML += `<p><b>Legal AI:</b> ${data.reply}</p>`;
 
-    // Show disclaimer only once
+    // Disclaimer (shown once per session)
     if (data.disclaimer) {
       container.innerHTML += `
         <p style="color:#aa0000;font-size:0.85em">
@@ -34,95 +30,67 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }
 
-    // Show lead form only if CTA exists
+    // Lead handoff UI
     if (data.cta) {
-      lastUserMessageForLead = message; // Save last user message
-
       container.innerHTML += `
-        <div id="lead-container" style="background:#eef;padding:10px;margin-top:10px">
+        <div id="lead-box" style="background:#eef;padding:10px;margin-top:10px">
           <p><b>${data.cta}</b></p>
 
-          <input id="lead-name" placeholder="Your name" style="width:48%;margin-right:4%;padding:5px" />
-          <input id="lead-email" placeholder="Your email" style="width:48%;padding:5px" />
-          <button id="lead-submit" style="margin-top:5px;padding:5px 10px">Request Consultation</button>
-          <p id="lead-msg" style="color:green;font-size:0.85em;margin-top:5px;"></p>
+          <input id="lead-name" placeholder="Your name" style="display:block;margin-bottom:5px" />
+          <input id="lead-email" placeholder="Your email" style="display:block;margin-bottom:5px" />
+          <button id="lead-submit">Request Consultation</button>
+
+          <p id="lead-msg" style="margin-top:5px;font-size:0.9em"></p>
         </div>
       `;
     }
 
-    // Show inquiry score
-    container.innerHTML += `<p style="font-size:0.75em;color:#666">Inquiry Score: ${data.score}</p>`;
+    // Demo score display
+    container.innerHTML += `
+      <p style="font-size:0.75em;color:#666">
+        Inquiry Score: ${data.score}
+      </p>
+    `;
 
     container.scrollTop = container.scrollHeight;
   }
 
-  // Send message button
-  document.getElementById("send-btn").onclick = sendMessage;
+  sendBtn.addEventListener("click", sendMessage);
 
-  // Handle lead form submission
- document.addEventListener("click", async (e) => {
-  if (e.target.id === "lead-submit") {
-    const nameEl = document.getElementById("lead-name");
-    const emailEl = document.getElementById("lead-email");
+  // ✅ Lead submission (event delegation)
+  document.addEventListener("click", async (e) => {
+    if (e.target.id !== "lead-submit") return;
 
-    const name = nameEl.value.trim();
-    const email = emailEl.value.trim();
+    const name = document.getElementById("lead-name").value.trim();
+    const email = document.getElementById("lead-email").value.trim();
 
     if (!name || !email) {
       alert("Please enter your name and email.");
       return;
     }
 
-    // Include last_message in the payload
-    const lastMessageEl = document.getElementById("user-message");
-    const lastMessage = lastMessageEl ? lastMessageEl.value.trim() : "";
-
     const res = await fetch("/leads", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content
-      },
-      body: JSON.stringify({
-        name,
-        email,
-        last_message: lastMessage
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email })
     });
 
     const data = await res.json();
-    const msgEl = document.getElementById("lead-msg");
-    if (data.status === "saved") {
-      msgEl.innerText = "Thank you! Someone will contact you shortly.";
-      // Hide the form
-      document.getElementById("lead-form").style.display = "none";
-    } else {
-      msgEl.innerText = "Something went wrong. Try again.";
-    }
-  }
-});
 
+    document.getElementById("lead-msg").innerText =
+      data.status === "saved"
+        ? "Thank you! Someone will contact you shortly."
+        : "Something went wrong. Please try again.";
+  });
 
-  // Save chat button
- document.getElementById("save-btn").onclick = async () => {
-  try {
-    const res = await fetch("/summary", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content
-      }
-    });
+  // ✅ Save chat
+  saveBtn.addEventListener("click", async () => {
+    const res = await fetch("/summary", { method: "POST" });
 
-    const data = await res.json();
-    if (data.status === "saved") {
+    if (res.ok) {
       alert("Chat saved!");
     } else {
-      alert("Failed to save chat.");
+      alert("Failed to save chat. Check console.");
     }
-  } catch (err) {
-    console.error(err);
-    alert("Error saving chat. Check console for details.");
-  }
-};
+  });
 });
