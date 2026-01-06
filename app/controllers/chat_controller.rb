@@ -1,86 +1,110 @@
-# app/controllers/chat_controller.rb
 class ChatController < ApplicationController
-  skip_before_action :verify_authenticity_token  # allow API POST requests
+  skip_before_action :verify_authenticity_token
   require "openai"
-  require "json"
 
+  LEAD_THRESHOLD = 60
+
+  @@inquiry_score = 0
   @@conversation = []
-  SYSTEM_PROMPT = "You are a professional legal AI assistant. Answer questions clearly and politely."
+  @@disclaimer_shown = false
+  @@last_user_message = nil
 
-  # GET /
+  SYSTEM_PROMPT = <<~PROMPT
+    You are a conversational legal intake assistant.
+
+    Rules:
+    - Be empathetic and human
+    - Ask short clarifying questions
+    - Do NOT give legal advice
+    - Do NOT recommend consultation unless explicitly told
+    - Do NOT solve the problem
+    - Your job is to understand the user's situation
+  PROMPT
+
   def index
-    # renders app/views/chat/index.html.erb
   end
 
-  # Load FAQs from JSON file
-  def load_faqs
-    faqs_file = Rails.root.join("faqs.json")
-    if File.exist?(faqs_file)
-      JSON.parse(File.read(faqs_file))
-    else
-      []
-    end
-  end
-
-  # POST /chat
   def chat
     user_message = params[:message].to_s.strip
+    @@last_user_message = user_message
+
     @@conversation << { role: "user", content: user_message }
 
-    faqs = load_faqs
-    faq_match = faqs.find { |f| user_message.downcase.include?(f["question"].downcase) }
+    @@inquiry_score += calculate_score(user_message)
+    score = @@inquiry_score
 
-    if faq_match
-      reply = faq_match["answer"]
-      response_type = "faq"
-    else
-      begin
-        client = OpenAI::Client.new(access_token: ENV["OPENAI_API_KEY"])
-        response = client.chat(
-          parameters: {
-            model: "gpt-4o-mini",
-            messages: [{ role: "system", content: SYSTEM_PROMPT }] + @@conversation,
-            temperature: 0.7
-          }
-        )
-        reply = response.dig("choices", 0, "message", "content") || "OpenAI returned no content."
-        response_type = "ai"
-      rescue StandardError => e
-        puts "OpenAI fallback: #{e.message}"
-        reply = "I understand you said: '#{user_message}'. This is a demo AI response."
-        response_type = "fallback"
+    # 🚨 HANDOFF — STOP AI COMPLETELY
+    if score >= LEAD_THRESHOLD
+      return render json: {
+        reply: handoff_message,
+        cta: "Please submit your details so a legal professional can contact you.",
+        score: score
+      }
+    end
+
+    # 🤖 AI CONVERSATION
+    begin
+      client = OpenAI::Client.new(access_token: ENV["OPENAI_API_KEY"])
+      response = client.chat(
+        parameters: {
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: user_message }
+          ],
+          temperature: 0.4
+        }
+      )
+
+      reply = response.dig("choices", 0, "message", "content")
+
+      if !@@disclaimer_shown
+        disclaimer = "This does not constitute legal advice."
+        @@disclaimer_shown = true
+      else
+        disclaimer = nil
       end
+
+    rescue
+      reply = "I understand. Could you tell me a bit more about what's going on?"
+      disclaimer = nil
     end
 
-    # Only show disclaimer at the first message
-    disclaimer = ""
-    if @@conversation.size == 1
-      disclaimer = "This does not constitute legal advice."
-    end
-    reply += "\n\n**Disclaimer:** #{disclaimer}" unless disclaimer.empty?
-
-    # Lead capture trigger
-    lead_trigger = user_message.downcase.match?(/lawyer|consultation|help|call|legal|advice/)
-
-    render json: { reply: reply, type: response_type, lead_capture: lead_trigger }
+    render json: {
+      reply: reply,
+      disclaimer: disclaimer,
+      score: score
+    }
   end
 
-  # POST /summary
-  def summary
-    summaries_dir = Rails.root.join("summaries")
-    Dir.mkdir(summaries_dir) unless Dir.exist?(summaries_dir)
+  def calculate_score(message)
+    keywords = {
+      "lawyer" => 30,
+      "court" => 20,
+      "divorce" => 30,
+      "custody" => 30,
+      "assets" => 20,
+      "help" => 10
+    }
 
-    filename = summaries_dir.join("chat_#{Time.now.to_i}.txt")
-    File.write(filename, @@conversation.map { |m| "#{m[:role].capitalize}: #{m[:content]}" }.join("\n"))
+    keywords.sum { |word, value| message.downcase.include?(word) ? value : 0 }
+  end
+
+  def handoff_message
+    "Thanks for explaining your situation. This looks like something a legal professional should review directly. Please share your details below and someone will contact you shortly."
+  end
+
+  def leads
+    data = JSON.parse(request.body.read)
+    name = data["name"]
+    email = data["email"]
+
+    Dir.mkdir(Rails.root.join("leads")) unless Dir.exist?(Rails.root.join("leads"))
+    File.write(
+      Rails.root.join("leads", "#{Time.now.to_i}_#{name.gsub(' ', '_')}.txt"),
+      "Name: #{name}\nEmail: #{email}\nLast Message: #{@@last_user_message}"
+    )
 
     render json: { status: "saved" }
-  end
-
-  # GET /admin
-  def admin
-    summaries_dir = Rails.root.join("summaries")
-    Dir.mkdir(summaries_dir) unless Dir.exist?(summaries_dir)
-    @summaries = Dir.children(summaries_dir)
-    render "admin/index"
   end
 end

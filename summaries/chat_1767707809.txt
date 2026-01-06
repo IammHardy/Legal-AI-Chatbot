@@ -1,0 +1,4 @@
+User: Hello
+User: I think i'll need a lawyer
+User: it's divorce related, my wife took me to court
+User: yes she wants to take custody of the child and needs division of assets, i need help.

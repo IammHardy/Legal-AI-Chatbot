@@ -4,4 +4,6 @@ Rails.application.routes.draw do
   post "/summary", to: "chat#summary"
   post "/clear_chat", to: "chat#clear_chat"
   get "/admin", to: "chat#admin"
+   # New route for lead capture
+  post "/leads", to: "leads#create"
 end

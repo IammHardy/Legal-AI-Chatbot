@@ -1,59 +1,13 @@
-<!-- app/views/chat/index.html.erb -->
-<div id="chat-widget" style="width: 100%; max-width: 600px; margin: auto; font-family: sans-serif;">
+<div id="chat-widget" style="max-width:600px;margin:auto">
   <h2>Legal AI Chat</h2>
-  <div id="chat-container" style="border:1px solid #ccc; padding:10px; min-height:300px; background:#f9f9f9; overflow-y:auto;"></div>
 
-  <input type="text" id="user-message" placeholder="Type your message..." style="width:75%; padding:8px;">
-  <button id="send-btn" style="padding:8px 12px;">Send</button>
-  <button id="save-btn" style="padding:8px 12px;">Save Chat</button>
+  <div id="chat-container"
+       style="border:1px solid #ccc;min-height:300px;padding:10px;overflow-y:auto">
+  </div>
+
+  <input id="user-message" placeholder="Type your message" />
+  <button id="send-btn">Send</button>
+  <button id="save-btn">Save Chat</button>
 </div>
 
-<script>
-const container = document.getElementById("chat-container");
-let firstMessage = true; // Track first message for disclaimer
-
-async function sendMessage() {
-  const message = document.getElementById("user-message").value.trim();
-  if (!message) return;
-
-  // Display user message
-  container.innerHTML += `<p><b>You:</b> ${message}</p>`;
-
-  const res = await fetch("/chat", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({message})
-  });
-  const data = await res.json();
-
-  let replyHtml = "";
-
-  // Style messages by type
-  if (data.type === "faq") {
-    replyHtml = `<p style="background:#eef; padding:5px;"><b>FAQ Answer:</b> ${data.reply}</p>`;
-  } else if (data.type === "ai") {
-    replyHtml = `<p style="background:#fff; padding:5px; border-left:3px solid #0077cc;"><b>Legal AI:</b> ${data.reply}</p>`;
-  } else if (data.type === "fallback") {
-    replyHtml = `<p style="background:#ffe; padding:5px; border-left:3px solid #aa0000;"><b>Demo AI:</b> ${data.reply}</p>`;
-  }
-
-  container.innerHTML += replyHtml;
-
-  // Lead capture CTA
-  if (data.lead_capture) {
-    container.innerHTML += `<p style="background:#eef; padding:5px;"><b>Request Consultation:</b> <a href="/contact" target="_blank">Click here to schedule</a></p>`;
-  }
-
-  document.getElementById("user-message").value = "";
-  container.scrollTop = container.scrollHeight;
-}
-
-document.getElementById("send-btn").onclick = sendMessage;
-
-// Save chat
-document.getElementById("save-btn").onclick = async () => {
-  const res = await fetch("/summary", { method: "POST" });
-  const data = await res.json();
-  alert(data.status === "saved" ? "Chat saved!" : "Failed to save chat");
-};
-</script>
+<%= javascript_include_tag "chat" %>
