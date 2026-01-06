@@ -4,12 +4,6 @@ class ChatController < ApplicationController
 
   LEAD_THRESHOLD = 60
 
-  # Use class variables for demo; for production use session or DB
-  @@conversation = []
-  @@inquiry_score = 0
-  @@disclaimer_shown = false
-  @@last_user_message = nil
-
   SYSTEM_PROMPT = <<~PROMPT
     You are a conversational legal intake assistant.
 
@@ -23,29 +17,30 @@ class ChatController < ApplicationController
   PROMPT
 
   def index
+    session[:inquiry_score] ||= 0
+    session[:disclaimer_shown] ||= false
+    session[:conversation] ||= []
+    session[:last_user_message] ||= nil
   end
 
   def chat
     user_message = params[:message].to_s.strip
-    return render json: { reply: "Please enter a message.", score: @@inquiry_score } if user_message.empty?
+    return render json: { reply: "Please enter a message.", score: session[:inquiry_score] } if user_message.empty?
 
-    @@last_user_message = user_message
-    @@conversation << { role: "user", content: user_message }
+    session[:last_user_message] = user_message
+    session[:conversation] << { role: "user", content: user_message }
 
-    # ✅ Accumulate score based on each message
-    score_increment = calculate_score(user_message)
-    @@inquiry_score += score_increment
+    session[:inquiry_score] += calculate_score(user_message)
 
-    # 🚨 HANDOFF — stop AI completely if threshold reached
-    if @@inquiry_score >= LEAD_THRESHOLD
+    # 🚨 HANDOFF — STOP AI COMPLETELY
+    if session[:inquiry_score] >= LEAD_THRESHOLD
       return render json: {
         reply: handoff_message,
         cta: "Please submit your details so a legal professional can contact you.",
-        score: @@inquiry_score
+        score: session[:inquiry_score]
       }
     end
 
-    # 🤖 AI CONVERSATION (only below threshold)
     begin
       client = OpenAI::Client.new(access_token: ENV["OPENAI_API_KEY"])
       response = client.chat(
@@ -61,11 +56,10 @@ class ChatController < ApplicationController
 
       reply = response.dig("choices", 0, "message", "content")
 
-      # ✅ Show disclaimer only once
       disclaimer = nil
-      if !@@disclaimer_shown
+      unless session[:disclaimer_shown]
         disclaimer = "This does not constitute legal advice."
-        @@disclaimer_shown = true
+        session[:disclaimer_shown] = true
       end
 
     rescue
@@ -76,11 +70,10 @@ class ChatController < ApplicationController
     render json: {
       reply: reply,
       disclaimer: disclaimer,
-      score: @@inquiry_score
+      score: session[:inquiry_score]
     }
   end
 
-  # ✅ Keyword-based scoring
   def calculate_score(message)
     keywords = {
       "lawyer" => 30,
@@ -91,43 +84,22 @@ class ChatController < ApplicationController
       "help" => 10
     }
 
-    score = 0
-    keywords.each do |word, value|
-      score += value if message.downcase.include?(word)
-    end
-    score
+    keywords.sum { |word, value| message.downcase.include?(word) ? value : 0 }
   end
 
   def handoff_message
     "Thanks for explaining your situation. This looks like something a legal professional should review directly. Please share your details below and someone will contact you shortly."
   end
 
-  # POST /leads
   def leads
-  data = JSON.parse(request.body.read)
-  name = data["name"]
-  email = data["email"]
-  last_message = @@last_user_message || ""
+    data = JSON.parse(request.body.read)
+    name = data["name"]
+    email = data["email"]
 
-  Dir.mkdir(Rails.root.join("leads")) unless Dir.exist?(Rails.root.join("leads"))
-  File.write(
-    Rails.root.join("leads", "#{Time.now.to_i}_#{name.gsub(' ', '_')}.txt"),
-    "Name: #{name}\nEmail: #{email}\nLast Message: #{last_message}"
-  )
-
-  render json: { status: "saved" }
-end
-
-
-  # POST /summary
-  def summary
-    summaries_dir = Rails.root.join("summaries")
-    Dir.mkdir(summaries_dir) unless Dir.exist?(summaries_dir)
-
-    filename = summaries_dir.join("chat_#{Time.now.to_i}.txt")
+    Dir.mkdir(Rails.root.join("leads")) unless Dir.exist?(Rails.root.join("leads"))
     File.write(
-      filename,
-      @@conversation.map { |m| "#{m[:role].capitalize}: #{m[:content]}" }.join("\n")
+      Rails.root.join("leads", "#{Time.now.to_i}_#{name.gsub(' ', '_')}.txt"),
+      "Name: #{name}\nEmail: #{email}\nLast Message: #{session[:last_user_message]}"
     )
 
     render json: { status: "saved" }
