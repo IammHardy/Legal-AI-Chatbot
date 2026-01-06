@@ -16,23 +16,28 @@ class ChatController < ApplicationController
     - Your job is to understand the user's situation
   PROMPT
 
+  # GET /
   def index
+    # Initialize session variables per user
     session[:inquiry_score] ||= 0
-    session[:disclaimer_shown] ||= false
     session[:conversation] ||= []
+    session[:disclaimer_shown] ||= false
     session[:last_user_message] ||= nil
   end
 
+  # POST /chat
   def chat
     user_message = params[:message].to_s.strip
     return render json: { reply: "Please enter a message.", score: session[:inquiry_score] } if user_message.empty?
 
+    # Store user message in session
     session[:last_user_message] = user_message
     session[:conversation] << { role: "user", content: user_message }
 
+    # Increment score per message
     session[:inquiry_score] += calculate_score(user_message)
 
-    # 🚨 HANDOFF — STOP AI COMPLETELY
+    # Handoff if threshold reached
     if session[:inquiry_score] >= LEAD_THRESHOLD
       return render json: {
         reply: handoff_message,
@@ -41,6 +46,7 @@ class ChatController < ApplicationController
       }
     end
 
+    # AI Conversation
     begin
       client = OpenAI::Client.new(access_token: ENV["OPENAI_API_KEY"])
       response = client.chat(
@@ -56,6 +62,7 @@ class ChatController < ApplicationController
 
       reply = response.dig("choices", 0, "message", "content")
 
+      # Show disclaimer only once per session
       disclaimer = nil
       unless session[:disclaimer_shown]
         disclaimer = "This does not constitute legal advice."
@@ -74,7 +81,8 @@ class ChatController < ApplicationController
     }
   end
 
-  def calculate_score(message)
+  # Keyword scoring
+  private def calculate_score(message)
     keywords = {
       "lawyer" => 30,
       "court" => 20,
@@ -83,23 +91,39 @@ class ChatController < ApplicationController
       "assets" => 20,
       "help" => 10
     }
-
     keywords.sum { |word, value| message.downcase.include?(word) ? value : 0 }
   end
 
-  def handoff_message
+  # Handoff message
+  private def handoff_message
     "Thanks for explaining your situation. This looks like something a legal professional should review directly. Please share your details below and someone will contact you shortly."
   end
 
+  # POST /leads
   def leads
     data = JSON.parse(request.body.read)
     name = data["name"]
     email = data["email"]
+    last_message = session[:last_user_message] || ""
 
     Dir.mkdir(Rails.root.join("leads")) unless Dir.exist?(Rails.root.join("leads"))
     File.write(
       Rails.root.join("leads", "#{Time.now.to_i}_#{name.gsub(' ', '_')}.txt"),
-      "Name: #{name}\nEmail: #{email}\nLast Message: #{session[:last_user_message]}"
+      "Name: #{name}\nEmail: #{email}\nLast Message: #{last_message}"
+    )
+
+    render json: { status: "saved" }
+  end
+
+  # POST /summary
+  def summary
+    summaries_dir = Rails.root.join("summaries")
+    Dir.mkdir(summaries_dir) unless Dir.exist?(summaries_dir)
+
+    filename = summaries_dir.join("chat_#{Time.now.to_i}.txt")
+    File.write(
+      filename,
+      session[:conversation].map { |m| "#{m[:role].capitalize}: #{m[:content]}" }.join("\n")
     )
 
     render json: { status: "saved" }
