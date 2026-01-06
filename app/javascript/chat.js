@@ -60,42 +60,69 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("send-btn").onclick = sendMessage;
 
   // Handle lead form submission
-  document.addEventListener("click", async (e) => {
-    if (e.target.id !== "lead-submit") return;
+ document.addEventListener("click", async (e) => {
+  if (e.target.id === "lead-submit") {
+    const nameEl = document.getElementById("lead-name");
+    const emailEl = document.getElementById("lead-email");
 
-    const name = document.getElementById("lead-name").value.trim();
-    const email = document.getElementById("lead-email").value.trim();
+    const name = nameEl.value.trim();
+    const email = emailEl.value.trim();
 
     if (!name || !email) {
-      alert("Please enter both your name and email.");
+      alert("Please enter your name and email.");
       return;
     }
 
+    // Include last_message in the payload
+    const lastMessageEl = document.getElementById("user-message");
+    const lastMessage = lastMessageEl ? lastMessageEl.value.trim() : "";
+
     const res = await fetch("/leads", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content
+      },
       body: JSON.stringify({
         name,
         email,
-        last_message: lastUserMessageForLead
+        last_message: lastMessage
       })
     });
 
     const data = await res.json();
-    const msgElem = document.getElementById("lead-msg");
-
+    const msgEl = document.getElementById("lead-msg");
     if (data.status === "saved") {
-      msgElem.innerText = "Thank you! Someone will contact you shortly.";
-      document.getElementById("lead-submit").disabled = true;
+      msgEl.innerText = "Thank you! Someone will contact you shortly.";
+      // Hide the form
+      document.getElementById("lead-form").style.display = "none";
     } else {
-      msgElem.innerText = "Something went wrong. Please try again.";
+      msgEl.innerText = "Something went wrong. Try again.";
     }
-  });
+  }
+});
+
 
   // Save chat button
-  document.getElementById("save-btn").onclick = async () => {
-    const res = await fetch("/summary", { method: "POST" });
+ document.getElementById("save-btn").onclick = async () => {
+  try {
+    const res = await fetch("/summary", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content
+      }
+    });
+
     const data = await res.json();
-    alert(data.status === "saved" ? "Chat saved!" : "Failed to save chat");
-  };
+    if (data.status === "saved") {
+      alert("Chat saved!");
+    } else {
+      alert("Failed to save chat.");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Error saving chat. Check console for details.");
+  }
+};
 });

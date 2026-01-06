@@ -104,18 +104,20 @@ class ChatController < ApplicationController
 
   # POST /leads
   def leads
-    data = JSON.parse(request.body.read)
-    name = data["name"]
-    email = data["email"]
+  data = JSON.parse(request.body.read)
+  name = data["name"]
+  email = data["email"]
+  last_message = @@last_user_message || ""
 
-    Dir.mkdir(Rails.root.join("leads")) unless Dir.exist?(Rails.root.join("leads"))
-    File.write(
-      Rails.root.join("leads", "#{Time.now.to_i}_#{name.gsub(' ', '_')}.txt"),
-      "Name: #{name}\nEmail: #{email}\nLast Message: #{@@last_user_message}"
-    )
+  Dir.mkdir(Rails.root.join("leads")) unless Dir.exist?(Rails.root.join("leads"))
+  File.write(
+    Rails.root.join("leads", "#{Time.now.to_i}_#{name.gsub(' ', '_')}.txt"),
+    "Name: #{name}\nEmail: #{email}\nLast Message: #{last_message}"
+  )
 
-    render json: { status: "saved" }
-  end
+  render json: { status: "saved" }
+end
+
 
   # POST /summary
   def summary
