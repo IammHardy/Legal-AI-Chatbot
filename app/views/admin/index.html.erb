@@ -1,6 +1,138 @@
-<h2>Saved Chat Summaries</h2>
-<ul>
-  <% @summaries.each do |file| %>
-    <li><a href="<%= "/summaries/#{file}" %>" target="_blank"><%= file %></a></li>
-  <% end %>
-</ul>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Legal AI Admin Panel Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+    }
+    header {
+      background: #0d6efd;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 0 20px;
+    }
+    .cards {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      flex: 1;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background: #0d6efd;
+      color: white;
+    }
+    tr:hover {background-color: #f1f1f1;}
+    button {
+      background: #0d6efd;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Legal AI Admin Panel Demo</h1>
+  </header>
+
+  <div class="container">
+    <div class="cards">
+      <div class="card">
+        <h2>Total Leads</h2>
+        <p id="total-leads">12</p>
+      </div>
+      <div class="card">
+        <h2>Pending Consultations</h2>
+        <p id="pending">5</p>
+      </div>
+      <div class="card">
+        <h2>Completed Consultations</h2>
+        <p id="completed">7</p>
+      </div>
+    </div>
+
+    <h2>Recent Leads</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Last Message</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="leads-table">
+        <tr>
+          <td>Michael Johnson</td>
+          <td>michael@email.com</td>
+          <td>Need a lawyer for divorce case</td>
+          <td>Pending</td>
+          <td><button>Mark Completed</button></td>
+        </tr>
+        <tr>
+          <td>Sarah Lee</td>
+          <td>sarah@email.com</td>
+          <td>Custody issue</td>
+          <td>Pending</td>
+          <td><button>Mark Completed</button></td>
+        </tr>
+        <tr>
+          <td>John Smith</td>
+          <td>john@email.com</td>
+          <td>Division of assets</td>
+          <td>Completed</td>
+          <td><button disabled>Completed</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // Demo JS: Toggle status of leads
+    const buttons = document.querySelectorAll("button");
+    buttons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest("tr");
+        row.cells[3].innerText = "Completed";
+        btn.disabled = true;
+      });
+    });
+  </script>
+</body>
+</html>
