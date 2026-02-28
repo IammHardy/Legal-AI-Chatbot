@@ -1,0 +1,36 @@
+{
+  "category": "Family",
+  "jurisdiction": "US",
+  "parties": [
+    "User",
+    "User's wife"
+  ],
+  "timeline": [
+    "Unknown"
+  ],
+  "facts_summary": [
+    "User's wife wants a divorce.",
+    "User's wife claims a share of property."
+  ],
+  "what_user_wants": "Help finding a lawyer to fight the divorce case.",
+  "documents_mentioned": [
+    "Unknown"
+  ],
+  "urgency_flags": [
+    "High"
+  ],
+  "missing_info": [
+    "Specific location within the US",
+    "Details about the property in question",
+    "Any existing legal documents related to the divorce"
+  ],
+  "suggested_next_questions": [
+    "What state are you located in?",
+    "Do you have any existing legal representation?",
+    "What type of property is being contested?",
+    "Have any legal documents been filed yet?",
+    "What is your timeline for needing assistance?",
+    "Are there any children involved in this case?"
+  ],
+  "handoff_recommended": true
+}

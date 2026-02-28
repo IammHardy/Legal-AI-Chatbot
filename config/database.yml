@@ -1,0 +1,22 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  host: <%= ENV.fetch("PGHOST", "127.0.0.1") %>
+  port: <%= ENV.fetch("PGPORT", 5432) %>
+  username: <%= ENV.fetch("PGUSER", "postgres") %>
+  password: <%= ENV.fetch("PGPASSWORD", "") %>
+
+development:
+  <<: *default
+  database: <%= ENV.fetch("PGDATABASE", "legal_chat_demo_development") %>
+
+test:
+  <<: *default
+  database: <%= ENV.fetch("PGDATABASE_TEST", "legal_chat_demo_test") %>
+
+production:
+  <<: *default
+  database: <%= ENV.fetch("PGDATABASE_PROD", "legal_chat_demo_production") %>
+  username: <%= ENV.fetch("PGUSER_PROD", ENV.fetch("PGUSER", "postgres")) %>
+  password: <%= ENV.fetch("PGPASSWORD_PROD", ENV.fetch("PGPASSWORD", "")) %>

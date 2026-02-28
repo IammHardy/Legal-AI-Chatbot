@@ -1,13 +1,79 @@
-<div id="chat-widget" style="max-width:600px;margin:auto">
-  <h2>Legal AI Chat</h2>
-
-  <div id="chat-container"
-       style="border:1px solid #ccc;min-height:300px;padding:10px;overflow-y:auto">
+<div id="chat-widget" class="chat-widget">
+  <div class="chat-header">
+    <div>
+      <h2>Legal Intake Assistant</h2>
+      <div class="sub">Not legal advice • Confidential intake</div>
+    </div>
+    <button id="clear-btn" class="ghost" type="button">Clear</button>
   </div>
 
-  <input id="user-message" placeholder="Type your message" />
-  <button id="send-btn">Send</button>
-  <button id="save-btn">Save Chat</button>
+  <div class="quick-actions">
+    <% ["Landlord/Tenant", "Employment", "Family", "Contract", "Debt/Finance"].each do |topic| %>
+      <button class="pill" data-topic="<%= topic %>" type="button"><%= topic %></button>
+    <% end %>
+  </div>
+
+  <!-- ✅ NEW: Document upload + review tools -->
+  <div class="doc-tools" style="margin:10px 0; padding:10px; border:1px solid #eee; border-radius:12px;">
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <input id="doc-file" type="file" />
+      <input id="doc-title" placeholder="Optional document title" style="padding:8px;border:1px solid #ddd;border-radius:10px;" />
+      <button id="doc-upload" class="ghost" type="button">Upload Contract</button>
+    </div>
+
+    <div id="doc-status" style="margin-top:8px; font-size:13px; color:#333;"></div>
+
+    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="ghost" id="doc-summary" type="button" disabled>Summary</button>
+      <button class="ghost" id="doc-risks" type="button" disabled>Risks</button>
+      <button class="ghost" id="doc-missing" type="button" disabled>Missing terms</button>
+      <button class="ghost" id="doc-questions" type="button" disabled>Ask intake questions</button>
+    </div>
+  </div>
+
+  <div id="chat-container" class="chat-container">
+    <% if @conversation.present? %>
+      <% @conversation.each do |m| %>
+        <% role = (m[:role] || m["role"]).to_s %>
+        <% content = (m[:content] || m["content"]).to_s %>
+
+        <div class="row">
+          <div>
+            <div class="msg <%= role == "user" ? "you" : "ai" %>">
+              <%= h(content) %>
+            </div>
+            <div class="stamp">
+              <%= Time.zone.now.strftime("%I:%M %p") %>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+
+  <div class="chat-footer">
+    <input id="user-message" placeholder="Describe what happened…" />
+    <button id="send-btn" class="primary" type="button">Send</button>
+    <button id="save-btn" class="ghost" type="button">Save</button>
+    <button id="report-btn" class="ghost" type="button">Intake Report</button>
+  </div>
+
+  <div id="meta" class="meta">
+    Inquiry Score: <%= @score.to_i %>
+  </div>
+
+  <!-- ✅ Intake report panel (download link removed because we download via send_data now) -->
+  <div id="report-panel" style="display:none; padding:12px 16px; border-top:1px solid #eee; background:#fff;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <strong>Intake Report</strong>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="report-close" class="ghost" type="button">Close</button>
+      </div>
+    </div>
+    <pre id="report-content" style="margin-top:10px; white-space:pre-wrap; background:#fafafa; border:1px solid #eee; padding:10px; border-radius:10px; max-height:260px; overflow:auto;"></pre>
+  </div>
 </div>
 
-<%= javascript_include_tag "chat" %>
+<script type="module">
+  import "chat"
+</script>

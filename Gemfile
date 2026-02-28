@@ -49,10 +49,12 @@ end
 
 gem 'dotenv-rails', groups: [:development, :test]
 gem 'pg', '>= 1.4'
+gem "pdf-reader"
+gem "docx"
 
 gem 'rails_12factor', group: :production # optional for logs/static
 
-
+gem "activestorage", "~> 8.0"
 group :development do
   # Use console on exceptions pages [https://github.com/rails/web-console]
   gem "web-console"
