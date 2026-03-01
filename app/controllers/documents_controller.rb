@@ -105,6 +105,112 @@ class DocumentsController < ApplicationController
     render json: { error: "Document review failed." }, status: 500
   end
 
+  # POST /clause_search
+  # body: { query: "termination", document_id?: 1 }
+  def clause_search
+    data = JSON.parse(request.body.read) rescue {}
+    query = data["query"].to_s.strip
+    doc_id = (data["document_id"].presence || session[:current_document_id]).to_i
+
+    return render json: { error: "No document uploaded yet." }, status: 422 if doc_id == 0
+    return render json: { error: "Enter a clause to find (e.g., termination, payment, liability)." }, status: 422 if query.blank?
+
+    doc = Document.find(doc_id)
+    text = doc.extracted_text.to_s
+    return render json: { error: "Document text is empty." }, status: 422 if text.blank?
+
+    chunks = chunk_text(text, 1100)
+    ranked = rank_chunks_by_query(chunks, query, limit: 6)
+
+    if ranked.empty?
+      return render json: { status: "ok", matches: [] }
+    end
+
+    render json: {
+      status: "ok",
+      query: query,
+      matches: ranked.map do |m|
+        {
+          chunk_id: m[:chunk_id],
+          score: m[:score],
+          preview: m[:text][0, 220]
+        }
+      end
+    }
+  rescue => e
+    Rails.logger.error("[DocumentsController#clause_search] #{e.class} #{e.message}")
+    render json: { error: "Clause search failed." }, status: 500
+  end
+
+  # POST /clause_rewrite
+  # body: { query: "termination", document_id?: 1 }
+  def clause_rewrite
+    data = JSON.parse(request.body.read) rescue {}
+    query = data["query"].to_s.strip
+    doc_id = (data["document_id"].presence || session[:current_document_id]).to_i
+
+    return render json: { error: "No document uploaded yet." }, status: 422 if doc_id == 0
+    return render json: { error: "Enter a clause to analyze (e.g., termination, payment, liability)." }, status: 422 if query.blank?
+
+    doc = Document.find(doc_id)
+    text = doc.extracted_text.to_s
+    return render json: { error: "Document text is empty." }, status: 422 if text.blank?
+
+    chunks = chunk_text(text, 1100)
+    ranked = rank_chunks_by_query(chunks, query, limit: 6)
+
+    if ranked.empty?
+      return render json: { error: "No relevant clause found for that query." }, status: 422
+    end
+
+    # Build prompt using top-ranked chunks only (token efficient)
+    selected = ranked.map { |m| { id: m[:chunk_id], text: m[:text] } }
+    prompt = build_clause_intel_prompt(query, selected)
+
+    client = OpenAI::Client.new(access_token: ENV["OPENAI_API_KEY"])
+    resp = client.chat(
+      parameters: {
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: <<~SYS
+              You are a legal document clause assistant.
+              Strict rules:
+              - Do NOT give legal advice.
+              - Use neutral language: "may", "often", "commonly", "consider".
+              - Do NOT cite laws or statutes.
+              - You MUST ground outputs in the provided chunks.
+              - Quotes MUST be exact substrings copied from chunks.
+              Output MUST be valid JSON only (no markdown).
+            SYS
+          },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.2,
+        max_tokens: 1100
+      }
+    )
+
+    raw = resp.dig("choices", 0, "message", "content").to_s.strip
+    parsed = safe_json_parse(raw)
+
+    unless parsed.is_a?(Hash) && parsed["clause"].is_a?(Hash)
+      Rails.logger.warn("[DocumentsController#clause_rewrite] Bad JSON output: #{raw[0, 900]}")
+      return render json: { error: "Model returned invalid format. Try again." }, status: 502
+    end
+
+    render json: {
+      status: "ok",
+      query: query,
+      clause: parsed["clause"],
+      sources: selected
+    }
+  rescue => e
+    Rails.logger.error("[DocumentsController#clause_rewrite] #{e.class} #{e.message}")
+    render json: { error: "Clause rewrite failed." }, status: 500
+  end
+
   private
 
   def chunk_text(text, max_chars)
@@ -215,5 +321,88 @@ class DocumentsController < ApplicationController
   def extract_docx(path)
     d = Docx::Document.open(path)
     d.paragraphs.map(&:text).join("\n")
+  end
+
+    # Simple, fast local relevance scoring (no embeddings needed)
+  def rank_chunks_by_query(chunks, query, limit:)
+    q = normalize(query)
+    q_terms = q.split.uniq
+    return [] if q_terms.empty?
+
+    scored = chunks.map.with_index do |text, idx|
+      t = normalize(text)
+      score = 0
+
+      # Term frequency scoring
+      q_terms.each do |term|
+        next if term.length < 3
+        score += t.scan(/\b#{Regexp.escape(term)}\b/).length * 3
+      end
+
+      # Bonus if query phrase appears
+      score += 10 if t.include?(q)
+
+      { chunk_id: idx + 1, score: score, text: text }
+    end
+
+    scored
+      .select { |x| x[:score] > 0 }
+      .sort_by { |x| -x[:score] }
+      .first(limit)
+  end
+
+  def normalize(s)
+    s.to_s.downcase.gsub(/[^a-z0-9\s\/\-]/, " ").gsub(/\s+/, " ").strip
+  end
+
+  def build_clause_intel_prompt(query, selected_chunks)
+    chunk_block = selected_chunks.map { |c| "CHUNK #{c[:id]}:\n#{c[:text]}" }.join("\n\n")
+
+    schema = <<~SCHEMA
+      Return JSON in this shape:
+      {
+        "clause": {
+          "found": true,
+          "label": "e.g., Termination",
+          "extracted_clause": "the best clause text you can extract (can be multi-paragraph)",
+          "citations": [
+            { "chunk_id": 3, "quote": "exact short quote (max 200 chars)" }
+          ],
+          "risks": [
+            { "title": "short", "why_it_matters": "1-2 sentences", "chunk_id": 3, "quote": "exact quote", "severity": "low|medium|high" }
+          ],
+          "rewrite_options": {
+            "neutral": "rewrite clause (clean drafting)",
+            "signer_friendly": "rewrite more protective of signer",
+            "counterparty_friendly": "rewrite more protective of other party"
+          },
+          "missing_or_ambiguous": [
+            { "item": "short", "question": "short question to clarify", "confidence": "low|medium|high" }
+          ]
+        }
+      }
+
+      Rules:
+      - If clause not clearly present, set found=false and use missing_or_ambiguous to ask questions. Do NOT invent.
+      - Every risk MUST include chunk_id + exact quote from chunks.
+      - Rewrite options are "draft language for discussion" (not legal advice).
+    SCHEMA
+
+    <<~PROMPT
+      Task: Clause intelligence
+
+      Query clause: "#{query}"
+
+      Use the chunks below to:
+      1) Identify and extract the most relevant clause text.
+      2) List 4–7 risk observations (non-legal advice), each with a citation.
+      3) Produce 3 rewrite options (neutral / signer-friendly / counterparty-friendly).
+      4) List 3–6 missing/ambiguous items as questions.
+
+      #{schema}
+
+      DOCUMENT CHUNKS:
+      #{chunk_block}
+    PROMPT
   end
 end
